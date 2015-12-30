@@ -108,7 +108,7 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 {
 	const struct Stab *stabs, *stab_end;
 	const char *stabstr, *stabstr_end;
-	int lfile, rfile, lfun, rfun, lline, rline;
+	int lfile, rfile, lfun, rfun, lline, rline, largs;
 
 	// Initialize *info
 	info->eip_file = "<unknown>";
@@ -145,6 +145,11 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 	if (lfile == 0)
 		return -1;
 
+	if (lfile <= rfile) {
+		if (stabs[lfile].n_strx < stabstr_end - stabstr)
+			info->eip_file = stabstr + stabs[lfile].n_strx;
+	} 
+
 	// Search within that file's stabs for the function definition
 	// (N_FUN).
 	lfun = lfile;
@@ -158,22 +163,23 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 			info->eip_fn_name = stabstr + stabs[lfun].n_strx;
 		info->eip_fn_addr = stabs[lfun].n_value;
 		addr -= info->eip_fn_addr;
+
+
+		
+
 		// Search within the function definition for the line number.
-		lline = lfun;
-		rline = rfun;
+		
 	} else {
 		// Couldn't find function stab!  Maybe we're in an assembly
 		// file.  Search the whole file for the line number.
 		info->eip_fn_addr = addr;
-		lline = lfile;
-		rline = rfile;
 	}
 	// Ignore stuff after the colon.
 	info->eip_fn_namelen = strfind(info->eip_fn_name, ':') - info->eip_fn_name;
-
 	
 	// Search within [lline, rline] for the line number stab.
 	// If found, set info->eip_line to the right line number.
+	
 	// If not found, return -1.
 	//
 	// Hint:
@@ -181,25 +187,32 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 	//	Look at the STABS documentation and <inc/stab.h> to find
 	//	which one.
 	// Your code here.
-
+	lline = lfun;
+	rline = rfun;
+	stab_binsearch(stabs, &lline, &rline, N_SLINE, addr);
+	if (lline <= rline) {
+		info->eip_line = stabs[rline].n_desc;
+	}else return -1;
 	
 	// Search backwards from the line number for the relevant filename
 	// stab.
 	// We can't just use the "lfile" stab because inlined functions
 	// can interpolate code from a different file!
 	// Such included source files use the N_SOL stab type.
-	while (lline >= lfile
-	       && stabs[lline].n_type != N_SOL
-	       && (stabs[lline].n_type != N_SO || !stabs[lline].n_value))
-		lline--;
-	if (lline >= lfile && stabs[lline].n_strx < stabstr_end - stabstr)
-		info->eip_file = stabstr + stabs[lline].n_strx;
-
+	// while (lline >= lfile
+	//        && stabs[lline].n_type != N_SOL
+	//        && (stabs[lline].n_type != N_SO || !stabs[lline].n_value))
+	// 	lline--;
+	// if (lline >= lfile && stabs[lline].n_strx < stabstr_end - stabstr)
+	// 	info->eip_file = stabstr + stabs[lline].n_strx;
 
 	// Set eip_fn_narg to the number of arguments taken by the function,
 	// or 0 if there was no containing function.
 	// Your code here.
+	largs = lfun+1;
+	while (stabs[largs++].n_type == N_PSYM) {
+		info->eip_fn_narg++;
+	}
 
-	
 	return 0;
 }

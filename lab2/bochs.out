@@ -1,0 +1,6 @@
+6828 decimal is 15254 octal!
+Physical memory: 32768K available, base = 640K, extended = 31744K
+kernel panic at kern/pmap.c:148: i386_vm_init: This function is not finished
+
+Welcome to the JOS kernel monitor!
+Type 'help' for a list of commands.
