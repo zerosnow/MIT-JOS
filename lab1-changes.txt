@@ -1,0 +1,138 @@
+只在 lab1 存在：bochs.log
+只在 lab1 存在：bochs.out
+diff -ru lab/.bochsrc lab1/.bochsrc
+--- lab/.bochsrc	2007-09-07 09:21:33.000000000 +0800
++++ lab1/.bochsrc	2015-12-28 16:03:08.016935000 +0800
+@@ -74,7 +74,7 @@
+ # now supported, but we still recommend to use the BIOS distributed with
+ # Bochs. Now the start address can be calculated from image size.
+ #=======================================================================
+-romimage: file=$BXSHARE/BIOS-bochs-latest, address=0xf0000
++romimage: file=$BXSHARE/BIOS-bochs-latest
+ #romimage: file=mybios.bin, address=0xfff80000 # 512k at memory top
+ #romimage: file=mybios.bin # calculate start address from image size
+ 
+diff -ru lab/boot/main.c lab1/boot/main.c
+--- lab/boot/main.c	2007-09-07 09:21:33.000000000 +0800
++++ lab1/boot/main.c	2015-12-28 15:45:12.919654999 +0800
+@@ -32,8 +32,8 @@
+ #define SECTSIZE	512
+ #define ELFHDR		((struct Elf *) 0x10000) // scratch space
+ 
+-void readsect(void*, uint32_t);
+-void readseg(uint32_t, uint32_t, uint32_t);
++static void readsect(void*, uint32_t);
++static void readseg(uint32_t, uint32_t, uint32_t);
+ 
+ void
+ bootmain(void)
+@@ -66,7 +66,7 @@
+ 
+ // Read 'count' bytes at 'offset' from kernel into virtual address 'va'.
+ // Might copy more than asked
+-void
++static void
+ readseg(uint32_t va, uint32_t count, uint32_t offset)
+ {
+ 	uint32_t end_va;
+@@ -90,7 +90,7 @@
+ 	}
+ }
+ 
+-void
++static void
+ waitdisk(void)
+ {
+ 	// wait for disk reaady
+@@ -98,7 +98,7 @@
+ 		/* do nothing */;
+ }
+ 
+-void
++static void
+ readsect(void *dst, uint32_t offset)
+ {
+ 	// wait for disk to be ready
+diff -ru lab/conf/env.mk lab1/conf/env.mk
+--- lab/conf/env.mk	2007-09-07 09:21:33.000000000 +0800
++++ lab1/conf/env.mk	2015-12-28 15:52:35.444807000 +0800
+@@ -6,7 +6,7 @@
+ #
+ # For overview commands only, the line should read 'V = @'.
+ # For overview and verbose commands, the line should read 'V ='.
+-V = @
++V = 
+ 
+ # If your system-standard GNU toolchain is ELF-compatible, then comment
+ # out the following line to use those tools (as opposed to the i386-jos-elf
+只在 lab1 存在：.git
+diff -ru lab/GNUmakefile lab1/GNUmakefile
+--- lab/GNUmakefile	2007-09-07 09:21:33.000000000 +0800
++++ lab1/GNUmakefile	2015-12-28 15:51:27.294749000 +0800
+@@ -70,7 +70,7 @@
+ # -fno-builtin is required to avoid refs to undefined functions in the kernel.
+ # Only optimize to -O1 to discourage inlining, which complicates backtraces.
+ CFLAGS := $(CFLAGS) $(DEFS) $(LABDEFS) -O1 -fno-builtin -I$(TOP) -MD 
+-CFLAGS += -Wall -Wno-format -Wno-unused -Werror -gstabs -m32
++CFLAGS += -Wall -Wno-format -Wno-unused -Werror -gstabs -m32 -fno-omit-frame-pointer
+ 
+ # Add -fno-stack-protector if the option exists.
+ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+diff -ru lab/kern/monitor.c lab1/kern/monitor.c
+--- lab/kern/monitor.c	2007-09-07 09:21:33.000000000 +0800
++++ lab1/kern/monitor.c	2015-12-29 18:35:44.435839998 +0800
+@@ -23,10 +23,12 @@
+ static struct Command commands[] = {
+ 	{ "help", "Display this list of commands", mon_help },
+ 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
++	{ "backtrace", "Display the list of stack backtrace", mon_backtrace},
+ };
+ #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
+ 
+ unsigned read_eip();
++unsigned read_ebp();
+ 
+ /***** Implementations of basic kernel monitor commands *****/
+ 
+@@ -59,6 +61,13 @@
+ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
+ {
+ 	// Your code here.
++	unsigned *ebp = (unsigned *)read_ebp();
++	cprintf("Stack backtrace\n");
++	while(ebp != 0) {
++		cprintf("ebp %08x eip %08x args %08x %08x %08x %08x %08x\n", ebp, *(ebp+1), *(ebp+2), *(ebp+3), *(ebp+4), *(ebp+5), *(ebp+6)); 
++		ebp = (unsigned *)*ebp;
++	}
++	//cprintf("ebp %08x eip %08x args %08x %08x %08x %08x %08x\n", ebp, *(ebp+1), *(ebp+2), *(ebp+3), *(ebp+4), *(ebp+5), *(ebp+6)); 
+ 	return 0;
+ }
+ 
+@@ -128,6 +137,7 @@
+ // return EIP of caller.
+ // does not work if inlined.
+ // putting at the end of the file seems to prevent inlining.
++unsigned read_eip() __attribute__((noinline));
+ unsigned
+ read_eip()
+ {
+diff -ru lab/lib/printfmt.c lab1/lib/printfmt.c
+--- lab/lib/printfmt.c	2007-09-07 09:21:33.000000000 +0800
++++ lab1/lib/printfmt.c	2015-12-29 18:29:19.643540000 +0800
+@@ -206,12 +206,9 @@
+ 
+ 		// (unsigned) octal
+ 		case 'o':
+-			// Replace this with your code.
+-			putch('X', putdat);
+-			putch('X', putdat);
+-			putch('X', putdat);
+-			break;
+-
++			num = getuint(&ap, lflag);
++			base = 8;
++			goto number;
+ 		// pointer
+ 		case 'p':
+ 			putch('0', putdat);
+只在 lab1 存在：.tags
