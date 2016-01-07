@@ -25,10 +25,12 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "backtrace", "Display the list of stack backtrace", mon_backtrace},
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
 unsigned read_eip();
+unsigned read_ebp();
 
 /***** Implementations of basic kernel monitor commands *****/
 
@@ -61,6 +63,22 @@ int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	// Your code here.
+	uint32_t *ebp = (uint32_t *)read_ebp();
+	uint32_t eip = read_eip();
+	struct Eipdebuginfo info;
+	char fun_name[256];
+	cprintf("Stack backtrace\n");
+	
+	while(ebp != 0) {
+		debuginfo_eip(eip, &info);
+		strncpy(fun_name, info.eip_fn_name, info.eip_fn_namelen);
+		fun_name[info.eip_fn_namelen] = '\0';
+		cprintf("%s: %d:  %s+%x\n", info.eip_file, info.eip_line, fun_name, eip-(info.eip_fn_addr));
+		cprintf("ebp %08x eip %08x args %08x %08x %08x %08x %08x\n", ebp, eip, *(ebp+2), *(ebp+3), *(ebp+4), *(ebp+5), *(ebp+6)); 
+		eip = *(ebp+1);
+		ebp = (unsigned *)*ebp;
+	}
+	//cprintf("ebp %08x eip %08x args %08x %08x %08x %08x %08x\n", ebp, *(ebp+1), *(ebp+2), *(ebp+3), *(ebp+4), *(ebp+5), *(ebp+6)); 
 	return 0;
 }
 
@@ -132,6 +150,7 @@ monitor(struct Trapframe *tf)
 // return EIP of caller.
 // does not work if inlined.
 // putting at the end of the file seems to prevent inlining.
+unsigned read_eip() __attribute__((noinline));
 unsigned
 read_eip()
 {

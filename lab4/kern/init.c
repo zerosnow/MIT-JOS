@@ -34,6 +34,7 @@ i386_init(void)
 	i386_detect_memory();
 	i386_vm_init();
 
+
 	// Lab 3 user environment initialization functions
 	env_init();
 	idt_init();

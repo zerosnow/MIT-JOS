@@ -201,7 +201,7 @@ i386_vm_init(void)
 	//    - pages -- kernel RW, user NONE
 	//    - the read-only version mapped at UPAGES -- kernel R, user R
 	// Your code goes here:
-	
+
 	boot_map_segment(pgdir, UPAGES, (void *)boot_freemem-(void *)pages, PADDR(pages), PTE_U | PTE_P);
 
 

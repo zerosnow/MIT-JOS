@@ -131,11 +131,14 @@ memmove(void *dst, const void *src, size_t n)
 	if (s < d && s + n > d) {
 		s += n;
 		d += n;
-		while (n-- > 0)
+		while (n-- > 0) {
+			//cprintf("1%d\n", n);
 			*--d = *--s;
+		}
 	} else
-		while (n-- > 0)
+		while (n-- > 0) {
 			*d++ = *s++;
+		}
 
 	return dst;
 }
