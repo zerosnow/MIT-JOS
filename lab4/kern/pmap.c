@@ -598,12 +598,12 @@ page_insert(pde_t *pgdir, struct Page *pp, void *va, int perm)
 {
 	pte_t *pt_addr;
 	pt_addr = pgdir_walk(pgdir, va, 1);
-	if (va == (void *)PTSIZE) return -E_NO_MEM;
+	// if (va == (void *)PTSIZE) return -E_NO_MEM;
 	if (pt_addr == NULL) return -E_NO_MEM;
-	if ((pp == page_lookup(pgdir, va, NULL)) && (*pt_addr == (page2pa(pp) | perm | PTE_P))) return 0;
+	// if ((pp == page_lookup(pgdir, va, NULL)) && (*pt_addr == (page2pa(pp) | perm | PTE_P))) return 0;
+	pp->pp_ref ++;
 	if ((*pt_addr & PTE_P) != 0) 
 		page_remove(pgdir, va);
-	pp->pp_ref ++;
 	*pt_addr = page2pa(pp) | perm | PTE_P;
 	//cprintf("%x, %x", *pt_addr, npage);
 	return 0;
@@ -722,19 +722,23 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here. 
-	uint32_t offset;
-	pte_t *pte;
-	
-	for (offset=0;offset<len;offset+=PGSIZE) {
-		if ((uint32_t)va+offset >= ULIM) {
-			user_mem_check_addr = (uint32_t)va+offset;
-			return -E_FAULT;
+	uint32_t begin;
+	begin = (uint32_t)va/PGSIZE*PGSIZE+PGSIZE;
+	if ((pgdir_walk(env->env_pgdir, va, 0)!=NULL) && ((uint32_t)*pgdir_walk(env->env_pgdir, va, 0) & (perm | PTE_P)) == (perm | PTE_P)) {
+		for (; begin<((uint32_t)va + len)/PGSIZE*PGSIZE; begin+=PGSIZE) {
+			if (begin >= ULIM) {
+				cprintf("user_mem_check >= ULIM\n");
+				user_mem_check_addr = begin;
+				//return -E_FAULT;
+			}
+			if ( (pgdir_walk(env->env_pgdir, va, 0) != NULL) || ((uint32_t)*pgdir_walk(env->env_pgdir, (void *)begin, 0) & (perm | PTE_P)) != (perm | PTE_P)) {
+				user_mem_check_addr = begin;
+				return -E_FAULT;
+			}
 		}
-		pte = pgdir_walk(env->env_pgdir, (void *)((uint32_t)va + offset), 0);
-		if ( pte == NULL || (*pte & (perm | PTE_P)) != (perm | PTE_P)) {
-			user_mem_check_addr = (uint32_t)va + offset;
-			return -E_FAULT;
-		}
+	}else {
+		user_mem_check_addr = (uint32_t)va;
+		return -E_FAULT;
 	}
 	return 0;
 }

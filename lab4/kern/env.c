@@ -165,7 +165,6 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	if (generation <= 0)	// Don't create a negative env_id.
 		generation = 1 << ENVGENSHIFT;
 	e->env_id = generation | (e - envs);
-	
 	// Set the basic status variables.
 	e->env_parent_id = parent_id;
 	e->env_status = ENV_RUNNABLE;
@@ -191,6 +190,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 
 	// Enable interrupts while in user mode.
 	// LAB 4: Your code here.
+	e->env_tf.tf_eflags |= FL_IF;
 
 	// Clear the page fault handler until user installs one.
 	e->env_pgfault_upcall = 0;
@@ -201,7 +201,6 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	// commit the allocation
 	LIST_REMOVE(e, env_link);
 	*newenv_store = e;
-
 	cprintf("[%08x] new env %08x\n", curenv ? curenv->env_id : 0, e->env_id);
 	return 0;
 }
@@ -303,7 +302,7 @@ load_icode(struct Env *e, uint8_t *binary, size_t size)
 		//cprintf("ph %d, elf->e_phnum %d", i, elf->e_phnum);
 		if (ph->p_type == ELF_PROG_LOAD) {
 			segment_alloc(e, (void *)(ph->p_va), ph->p_memsz);
-			memset((void *)ph->p_va, 0, ph->p_memsz-ph->p_filesz);
+			memset((void *)ph->p_va, 0, ph->p_memsz);
 			memmove((void *)(ph->p_va), (void *)((uint32_t)elf + ph->p_offset), ph->p_filesz);
 		}
 		ph++;
@@ -335,10 +334,10 @@ env_create(uint8_t *binary, size_t size)
 {
 	// LAB 3: Your code here.
 	struct Env *e;
-	if (env_alloc(&e, 0) < 0) {cprintf("env_alloc error"); return;}
-	cprintf("env_alloc success\n");
+	if (env_alloc(&e, 0) < 0) return;
+	//cprintf("env_alloc success\n");
 	load_icode(e, binary, size);
-	cprintf("load_icode success\n");
+	//cprintf("load_icode success\n");
 	//env_run(e);
 }
 

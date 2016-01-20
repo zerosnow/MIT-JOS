@@ -33,6 +33,7 @@ extern void device_not_available();
 extern void double_fault();
 extern void float_point_error();
 extern void system_call();
+extern void timer();
 
 extern void invalid_TSS();
 extern void segment_not_present();
@@ -97,6 +98,7 @@ idt_init(void)
 	SETGATE(idt[T_DBLFLT], 0, GD_KT, double_fault, 0);
 	SETGATE(idt[T_FPERR], 0, GD_KT, float_point_error, 0);
 	SETGATE(idt[T_SYSCALL], 0, GD_KT, system_call, 3);
+	SETGATE(idt[IRQ_OFFSET+IRQ_TIMER], 0, GD_KT, timer, 0);
 
 	SETGATE(idt[T_TSS], 0, GD_KT, invalid_TSS, 0);
 	SETGATE(idt[T_SEGNP], 0, GD_KT, segment_not_present, 0);
@@ -168,6 +170,8 @@ trap_dispatch(struct Trapframe *tf)
 		return;
 		case T_BRKPT:
 		monitor(tf);
+		case IRQ_OFFSET+IRQ_TIMER:
+		sched_yield();
 		return;
 	}
 	
@@ -215,14 +219,16 @@ void
 page_fault_handler(struct Trapframe *tf)
 {
 	uint32_t fault_va;
+	struct UTrapframe *utf;
 
 	// Read processor's CR2 register to find the faulting address
 	fault_va = rcr2();
+	//cprintf ("fault_va = %x\n", fault_va);
 
 	// Handle kernel-mode page faults.
 	
 	// LAB 3: Your code here.
-
+	if ((tf->tf_cs & 3) == 0)panic("kernel-mode page faults");
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
 
@@ -252,6 +258,24 @@ page_fault_handler(struct Trapframe *tf)
 	//   (the 'tf' variable points at 'curenv->env_tf').
 	
 	// LAB 4: Your code here.
+	if (curenv->env_pgfault_upcall != NULL) {
+		if (tf->tf_esp > USTACKTOP)
+			utf = (struct UTrapframe *)((void *)tf->tf_esp - sizeof(struct UTrapframe) - 4);
+		else 
+			utf = (struct UTrapframe *)((void *)UXSTACKTOP - sizeof(struct UTrapframe));
+		user_mem_assert(curenv, utf, sizeof(struct UTrapframe), PTE_P |PTE_U |PTE_W);
+		utf->utf_fault_va = fault_va;
+		utf->utf_err = tf->tf_err;
+		utf->utf_regs = tf->tf_regs;
+		utf->utf_eip = tf->tf_eip;
+		utf->utf_eflags = tf->tf_eflags;
+		utf->utf_esp = tf->tf_esp;
+		tf->tf_eip = (uintptr_t)(curenv->env_pgfault_upcall);
+		tf->tf_esp = (uintptr_t)utf;
+		env_run(curenv);
+	}else {
+		cprintf("env_pgfault_upcall == NULL\n");
+	}
 
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",

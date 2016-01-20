@@ -52,6 +52,8 @@
 	TRAPHANDLER_NOEC(double_fault, T_DBLFLT)
 	TRAPHANDLER_NOEC(float_point_error, T_FPERR)
 	TRAPHANDLER_NOEC(system_call, T_SYSCALL)
+	TRAPHANDLER_NOEC(timer, IRQ_OFFSET+IRQ_TIMER)
+
 
 	TRAPHANDLER(invalid_TSS, T_TSS)
 	TRAPHANDLER(segment_not_present, T_SEGNP)
